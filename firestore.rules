@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper functions ────────────────────────────────────────────────────
+
+    // Returns true when the caller is authenticated.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Returns the caller's role from the custom claim set by Cloud Functions.
+    // New users who have never had a claim set will return null.
+    function callerRole() {
+      return request.auth.token.get('role', null);
+    }
+
+    // Returns true for org reviewers and admins.
+    function isReviewer() {
+      return isSignedIn() && callerRole() in ['reviewer', 'admin'];
+    }
+
+    // Returns true for admins only.
+    function isAdmin() {
+      return isSignedIn() && callerRole() == 'admin';
+    }
+
+    // Returns true when the caller owns this application document.
+    function isOwner(submitterId) {
+      return isSignedIn() && request.auth.uid == submitterId;
+    }
+
+    // Returns true when an incoming write does NOT include the `status` field.
+    // Submitters are not allowed to change status directly.
+    function doesNotWriteStatus() {
+      return !('status' in request.resource.data.diff(resource.data).affectedKeys());
+    }
+
+    // ─── /roles collection ───────────────────────────────────────────────────
+    //
+    // Each document is keyed by the user's UID.
+    // • Any authenticated user may read their own role document.
+    // • Only Cloud Functions (admin SDK) may write — no client writes allowed.
+
+    match /roles/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false; // admin SDK bypasses rules
+    }
+
+    // ─── /applications collection ─────────────────────────────────────────────
+
+    match /applications/{applicationId} {
+
+      // Submitter: read their own application only.
+      // Reviewer/admin: read any application.
+      allow read: if isReviewer()
+                  || (isSignedIn() && resource.data.submitterId == request.auth.uid);
+
+      // Submitter: create a new application where submitterId == their uid,
+      // and the initial status must not be set by the client (Functions set it).
+      // We allow the create only if status is absent or equals 'Draft' and the
+      // submitterId matches the authenticated user.
+      allow create: if isSignedIn()
+                    && request.resource.data.submitterId == request.auth.uid
+                    && request.resource.data.get('status', 'Draft') == 'Draft';
+
+      // Submitter: update their own application BUT cannot touch the `status`
+      // field — all status transitions go through Cloud Functions.
+      allow update: if isOwner(resource.data.submitterId)
+                    && doesNotWriteStatus();
+
+      // Reviewers CANNOT directly write application documents.
+      // All writes go through Cloud Functions (admin SDK bypasses these rules).
+      // No explicit allow for reviewers on write means it is denied.
+
+      allow delete: if false; // applications are never deleted directly
+
+      // ── /comments subcollection ────────────────────────────────────────────
+      //
+      // • Reviewers: full read of all comments.
+      // • Submitters: read their own application's comments EXCEPT internal_notes.
+      // • All writes go through Cloud Functions (no direct client writes).
+
+      match /comments/{commentId} {
+        allow read: if isReviewer()
+                    || (isSignedIn()
+                        && get(/databases/$(database)/documents/applications/$(applicationId)).data.submitterId == request.auth.uid
+                        && resource.data.type != 'internal_note');
+
+        allow write: if false; // Cloud Functions only
+      }
+
+      // ── /changelog subcollection ───────────────────────────────────────────
+      //
+      // Read-only for submitters (own app) and reviewers (any app).
+      // All writes go through Cloud Functions.
+
+      match /changelog/{entryId} {
+        allow read: if isReviewer()
+                    || (isSignedIn()
+                        && get(/databases/$(database)/documents/applications/$(applicationId)).data.submitterId == request.auth.uid);
+
+        allow write: if false; // Cloud Functions only
+      }
+    }
+  }
+}

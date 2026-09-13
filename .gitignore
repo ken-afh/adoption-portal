@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+ui/dist/
+functions/lib/
+
+# Environment variables -- never commit these
+.env
+.env.local
+.env.*.local
+functions/.env
+functions/.secret.local
+
+# Firebase emulator data
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui/.firebase/
+firestore-debug.log
+firestore.rules.backup
+
+# Vite
+ui/*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
