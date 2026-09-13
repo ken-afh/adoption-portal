@@ -7,4 +7,4 @@ Round logo here: https://drive.google.com/file/d/1QOKHQtPUuswse3naAOJ9VP-6FT6IzP
 
 
 For Firestore, why us-central1? Most of my users are in the DC Metro region
-For Firestore, "Native mode" is not an option
+For Firestore, "Native mode" is not an option. I can choose Standard edition or Enterprise edition
