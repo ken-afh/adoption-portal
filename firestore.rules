@@ -37,6 +37,17 @@ service cloud.firestore {
       return !('status' in request.resource.data.diff(resource.data).affectedKeys());
     }
 
+    // ─── /config collection ──────────────────────────────────────────────────
+    //
+    // Runtime configuration. Currently only /config/notifications is used.
+    // • Admins may read and write (to update the notification email).
+    // • Cloud Functions (admin SDK) may also read (bypasses rules).
+    // • No other access.
+
+    match /config/{configId} {
+      allow read, write: if isAdmin();
+    }
+
     // ─── /deleteRequests collection ──────────────────────────────────────────
     //
     // Keyed by the requesting user's UID.

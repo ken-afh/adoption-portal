@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react"
 import {
   collection,
+  doc,
+  getDoc,
   onSnapshot,
   query,
+  setDoc,
   where,
   orderBy,
 } from "firebase/firestore"
@@ -10,6 +13,7 @@ import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
 import { STATUS_CONFIG, type FirestoreApplication } from "@/components/ApplicationCard"
 import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 
@@ -577,6 +581,230 @@ function BootstrapSection() {
   )
 }
 
+// ─── Section 5 — Notification email settings ─────────────────────────────────
+
+function NotificationSettingsSection() {
+  const [email, setEmail] = useState("")
+  const [savedEmail, setSavedEmail] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
+
+  // Load current setting from Firestore on mount
+  useEffect(() => {
+    getDoc(doc(db, "config", "notifications")).then((snap) => {
+      const value = snap.exists() ? ((snap.data()["notifyEmail"] as string) ?? "") : ""
+      setEmail(value)
+      setSavedEmail(value)
+    }).catch(() => { /* non-fatal */ }).finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = email.trim()
+    setSaving(true)
+    try {
+      await setDoc(doc(db, "config", "notifications"), { notifyEmail: trimmed }, { merge: true })
+      setSavedEmail(trimmed)
+      toast({
+        title: "Setting saved",
+        description: trimmed
+          ? `New submission notifications will go to ${trimmed}.`
+          : "Notification email cleared — using the deployment default.",
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save."
+      toast({ title: "Error", description: msg, variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="rounded-xl border bg-card p-6">
+      <h2 className="mb-1 text-lg font-semibold">Notification Email</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Override the email address that receives new-submission notifications. Leave blank to
+        use the deployment default (<code className="text-xs">info@aforeverhome.net</code>).
+        Use this during testing to prevent real notification emails.
+      </p>
+
+      {loading ? (
+        <div className="h-9 w-64 animate-pulse rounded-md bg-muted" />
+      ) : (
+        <form onSubmit={handleSave} className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label htmlFor="notify-email" className="mb-1 block text-sm font-medium">
+              Recipient email
+            </label>
+            <input
+              id="notify-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="info@aforeverhome.net"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <Button type="submit" size="sm" disabled={saving || email.trim() === savedEmail}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+          {email.trim() !== "" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => setEmail("")}
+            >
+              Clear override
+            </Button>
+          )}
+        </form>
+      )}
+
+      {savedEmail && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Currently overriding to: <strong>{savedEmail}</strong>
+        </p>
+      )}
+    </section>
+  )
+}
+
+// ─── Section 6 — All active applications ─────────────────────────────────────
+
+const ACTIVE_STATUSES = [
+  APPLICATION_STATUS.SUBMITTED,
+  APPLICATION_STATUS.UNDER_REVIEW,
+  APPLICATION_STATUS.CLARIFICATION_REQUESTED,
+  APPLICATION_STATUS.CLARIFICATION_RECEIVED,
+] as const
+
+function AllActiveSection() {
+  const [applications, setApplications] = useState<FirestoreApplication[]>([])
+  const [appsLoading, setAppsLoading] = useState(true)
+  const [reviewers, setReviewers] = useState<Reviewer[]>([])
+  const [reviewersLoading, setReviewersLoading] = useState(true)
+
+  // Fetch reviewers once
+  useEffect(() => {
+    async function fetchReviewers() {
+      try {
+        const fn = httpsCallable<Record<string, never>, { reviewers: Reviewer[] }>(
+          functions,
+          "listReviewers"
+        )
+        const result = await fn({})
+        setReviewers(result.data.reviewers)
+      } catch {
+        // Non-fatal
+      } finally {
+        setReviewersLoading(false)
+      }
+    }
+    fetchReviewers()
+  }, [])
+
+  // Real-time listener for ALL active applications (assigned + unassigned)
+  useEffect(() => {
+    const q = query(
+      collection(db, "applications"),
+      where("status", "in", [...ACTIVE_STATUSES]),
+      orderBy("submittedAt", "asc")
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<FirestoreApplication, "id">),
+        }))
+        setApplications(docs)
+        setAppsLoading(false)
+      },
+      () => setAppsLoading(false)
+    )
+
+    return unsubscribe
+  }, [])
+
+  return (
+    <section className="rounded-xl border bg-card p-6">
+      <h2 className="mb-1 text-lg font-semibold">All Active Applications</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        All submitted applications currently in progress, with their assigned reviewer.
+      </p>
+
+      {appsLoading ? (
+        <div className="space-y-3">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
+      ) : applications.length === 0 ? (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-5 text-sm text-muted-foreground">
+          <span>✓</span>
+          <span>No active applications.</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {applications.map((app) => {
+            const config =
+              STATUS_CONFIG[app.status as keyof typeof STATUS_CONFIG] ??
+              STATUS_CONFIG[APPLICATION_STATUS.DRAFT]
+            const reviewerName =
+              app.assignedReviewerEmail
+                ? reviewers.find((r) => r.email === app.assignedReviewerEmail)?.email ??
+                  app.assignedReviewerEmail
+                : null
+            return (
+              <div
+                key={app.id}
+                className="flex flex-wrap items-center gap-3 rounded-lg border bg-background px-4 py-3"
+              >
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-medium">
+                      {app.applicantName?.trim() || "—"}
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-block rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+                        config.className
+                      )}
+                    >
+                      {config.label}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {reviewerName ? (
+                      <>Reviewer: <strong>{reviewerName}</strong></>
+                    ) : (
+                      <span className="italic">Unassigned</span>
+                    )}
+                    {" · "}Submitted {formatDate(app.submittedAt)}
+                  </p>
+                </div>
+
+                {/* Reassign button */}
+                <AssignPopover
+                  applicationId={app.id}
+                  reviewers={reviewers}
+                  reviewersLoading={reviewersLoading}
+                  onAssigned={() => { /* onSnapshot updates list */ }}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -586,13 +814,15 @@ export default function AdminPage() {
       <div>
         <h1 className="text-2xl font-bold">Admin Panel</h1>
         <p className="text-sm text-muted-foreground">
-          Manage user roles and reviewer assignments.
+          Manage user roles, reviewer assignments, and portal settings.
         </p>
       </div>
 
-      <ManageRolesSection />
+      <NotificationSettingsSection />
+      <AllActiveSection />
       <UnassignedSection />
       <DeleteRequestsSection />
+      <ManageRolesSection />
       <BootstrapSection />
     </div>
   )

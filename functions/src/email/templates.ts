@@ -262,3 +262,38 @@ export function reviewerAssignedEmail(
     html: layout('Reviewer Assignment', body),
   };
 }
+
+export function dataErasureNotificationEmail(
+  displayName: string,
+  email: string,
+  applicationCount: number,
+  appBaseUrl: string,
+): EmailTemplate {
+  const appNoun = applicationCount === 1 ? 'application' : 'applications';
+  const body = `
+    ${p(`A user has exercised their GDPR / CCPA right-to-erasure. Their account and all associated data have been <strong>permanently deleted</strong>.`)}
+    <table cellpadding="0" cellspacing="0" border="0"
+           style="width:100%;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:16px;">
+      <tr><td style="padding:12px 16px;background-color:#f9f9f9;border-bottom:1px solid #e0e0e0;">
+        <strong style="color:#212121;font-size:14px;">Deleted Account</strong>
+      </td></tr>
+      <tr><td style="padding:12px 16px;">
+        <p style="margin:0 0 8px;font-size:14px;color:#424242;">
+          <strong>Name:</strong> ${displayName}
+        </p>
+        <p style="margin:0 0 8px;font-size:14px;color:#424242;">
+          <strong>Email:</strong> ${email}
+        </p>
+        <p style="margin:0;font-size:14px;color:#424242;">
+          <strong>Applications deleted:</strong> ${applicationCount} ${appNoun}
+        </p>
+      </td></tr>
+    </table>
+    ${p(`No further action is required. This notification is for your records.`)}
+    ${btn(`${appBaseUrl}/admin`, 'Go to Admin Panel')}
+  `;
+  return {
+    subject: `Data erasure completed for ${email}`,
+    html: layout('Data Erasure Notification', body),
+  };
+}

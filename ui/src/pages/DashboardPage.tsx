@@ -6,8 +6,6 @@ import {
   where,
   orderBy,
   onSnapshot,
-  doc,
-  getDoc,
 } from "firebase/firestore"
 import { sendEmailVerification } from "firebase/auth"
 import { httpsCallable } from "firebase/functions"
@@ -56,18 +54,15 @@ function DeleteDataDialog({
     setBusy(true)
     try {
       await httpsCallable(functions, "deleteMyData")({})
-      toast({
-        title: "Deletion request submitted",
-        description:
-          "An administrator will process your request and delete your data within 30 days.",
-      })
+      // Auth account is now deleted server-side; onAuthStateChanged will
+      // sign the user out automatically. Just close the dialog.
       onClose()
     } catch (err: unknown) {
       const msg =
-        err instanceof Error && err.message.includes("already-exists")
-          ? "You already have a pending deletion request."
-          : "Could not submit your request. Please try again."
-      toast({ title: msg, variant: "destructive" })
+        err instanceof Error
+          ? err.message
+          : "Could not delete your data. Please try again."
+      toast({ title: "Error", description: msg, variant: "destructive" })
     } finally {
       setBusy(false)
     }
@@ -77,11 +72,11 @@ function DeleteDataDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
       <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-lg space-y-4">
-        <h2 className="font-semibold text-base">Request data deletion</h2>
+        <h2 className="font-semibold text-base">Delete my data</h2>
         <p className="text-sm text-muted-foreground">
-          Submitting this request asks an administrator to permanently delete your account
-          and all associated applications. You will be notified when the deletion is
-          complete. This satisfies GDPR / CCPA right-to-erasure requirements.
+          This will <strong>immediately and permanently</strong> delete your account and
+          all associated applications. This action cannot be undone and satisfies your
+          GDPR / CCPA right-to-erasure.
         </p>
         <div className="flex gap-3 justify-end">
           <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
@@ -93,7 +88,7 @@ function DeleteDataDialog({
             onClick={handleRequest}
             disabled={busy}
           >
-            {busy ? "Submitting…" : "Submit request"}
+            {busy ? "Deleting…" : "Delete my data"}
           </Button>
         </div>
       </div>
@@ -104,14 +99,19 @@ function DeleteDataDialog({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
+
+  // Org-domain bootstrap banner: shown when an @aforeverhome.net user is still
+  // on the "submitter" role — they need to be promoted to admin or reviewer
+  // via the Firebase Console first time, or by an existing admin.
+  const isOrgUser = user?.email?.endsWith("@aforeverhome.net") ?? false
+  const showOrgBanner = isOrgUser && role === "submitter"
 
   const [applications, setApplications] = useState<FirestoreApplication[]>([])
   const [loading, setLoading] = useState(true)
   const [resendDisabled, setResendDisabled] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [hasPendingRequest, setHasPendingRequest] = useState(false)
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -140,14 +140,6 @@ export default function DashboardPage() {
     )
 
     return unsubscribe
-  }, [user])
-
-  // Check whether user already has a pending delete request
-  useEffect(() => {
-    if (!user) return
-    getDoc(doc(db, "deleteRequests", user.uid)).then((snap) => {
-      setHasPendingRequest(snap.exists() && snap.data()?.["status"] === "pending")
-    }).catch(() => { /* non-fatal */ })
   }, [user])
 
   const handleResendVerification = async () => {
@@ -191,6 +183,40 @@ export default function DashboardPage() {
           >
             {resendDisabled ? "Email sent" : "Resend email"}
           </Button>
+        </div>
+      )}
+
+      {/* Org-domain bootstrap banner */}
+      {showOrgBanner && (
+        <div className="mb-4 rounded-lg border border-blue-300 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+          <p className="mb-2 font-semibold">
+            👋 You&rsquo;re signed in as an A Forever Home staff account, but your
+            role hasn&rsquo;t been configured yet.
+          </p>
+          <p className="mb-3 text-blue-800">
+            To gain admin or reviewer access, an existing admin can go to the{" "}
+            <strong>Admin Panel → Manage User Roles</strong> and assign your role.
+          </p>
+          <p className="mb-1 font-medium text-blue-800">
+            Setting up the first admin (no existing admin yet):
+          </p>
+          <ol className="list-decimal space-y-1 pl-5 text-blue-800">
+            <li>
+              Open{" "}
+              <strong>Firebase Console → Firestore → roles collection</strong>.
+            </li>
+            <li>
+              Create a document with <strong>ID = your Firebase UID</strong>{" "}
+              <span className="font-mono text-xs">({user?.uid})</span>:
+              <pre className="mt-1 overflow-x-auto rounded bg-blue-100 px-3 py-2 text-xs">
+                {`{\n  "uid": "${user?.uid ?? "YOUR_UID"}",\n  "role": "admin",\n  "email": "${user?.email ?? "you@aforeverhome.net"}"\n}`}
+              </pre>
+            </li>
+            <li>
+              <strong>Sign out and sign back in</strong> for the role to take
+              effect.
+            </li>
+          </ol>
         </div>
       )}
 
@@ -240,28 +266,19 @@ export default function DashboardPage() {
       {/* GDPR / data deletion */}
       <div className="mt-10 border-t pt-6">
         <p className="mb-2 text-sm font-medium">Privacy</p>
-        {hasPendingRequest ? (
-          <p className="text-sm text-muted-foreground">
-            Your data deletion request is <strong>pending</strong> and will be processed by
-            an administrator shortly.
-          </p>
-        ) : (
-          <>
-            <p className="mb-3 text-sm text-muted-foreground">
-              You can request permanent deletion of your account and all associated data
-              (GDPR / CCPA right to erasure).
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Request data deletion
-            </Button>
-          </>
-        )}
+        <p className="mb-3 text-sm text-muted-foreground">
+          You can permanently delete your account and all associated data
+          (GDPR / CCPA right to erasure). This is immediate and cannot be undone.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+          onClick={() => setShowDeleteDialog(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete my data
+        </Button>
       </div>
 
       {/* Floating action button */}
@@ -279,15 +296,7 @@ export default function DashboardPage() {
 
       <DeleteDataDialog
         open={showDeleteDialog}
-        onClose={() => {
-          setShowDeleteDialog(false)
-          // Re-check pending status after submitting
-          if (user) {
-            getDoc(doc(db, "deleteRequests", user.uid)).then((snap) => {
-              setHasPendingRequest(snap.exists() && snap.data()?.["status"] === "pending")
-            }).catch(() => { /* non-fatal */ })
-          }
-        }}
+        onClose={() => setShowDeleteDialog(false)}
       />
     </div>
   )

@@ -14,7 +14,7 @@ import {
   newSubmissionNotificationEmail,
   clarificationReceivedEmail,
 } from '../email/templates';
-import { APP_BASE_URL, NOTIFY_EMAIL } from '../config';
+import { APP_BASE_URL, getNotifyEmail } from '../config';
 
 const REQUIRED_FIELDS: string[] = [
   'applicantName',
@@ -157,7 +157,7 @@ export const submitApplication = onCall(
           baseUrl,
           resubmitCount,
         );
-        await sendEmail({ to: NOTIFY_EMAIL.value(), ...notifyTpl });
+        await sendEmail({ to: await getNotifyEmail(), ...notifyTpl });
       } else if (newStatus === STATUS.CLARIFICATION_RECEIVED) {
         const reviewerEmail = appDataForEmail['assignedReviewerEmail'] as string | null;
         if (reviewerEmail) {

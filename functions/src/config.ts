@@ -59,11 +59,35 @@ export const ORG_DOMAIN = defineString('ORG_DOMAIN', {
  * Override address for new-submission notifications.
  * In production this should be info@aforeverhome.net.
  * During testing, set this to your own email to avoid alerting the real inbox.
+ * This can also be overridden at runtime via the Firestore /config/notifications doc.
  */
 export const NOTIFY_EMAIL = defineString('NOTIFY_EMAIL', {
   default: 'info@aforeverhome.net',
   description: 'Recipient for new-submission and resubmission notifications (override for testing)',
 });
+
+// ─── Runtime config helpers ───────────────────────────────────────────────────
+
+import * as adminPkg from 'firebase-admin';
+
+/**
+ * Returns the effective notification email address.
+ * Checks Firestore /config/notifications.notifyEmail first; falls back to the
+ * NOTIFY_EMAIL param so callers never have to worry about null/undefined.
+ */
+export async function getNotifyEmail(): Promise<string> {
+  try {
+    const db = adminPkg.firestore();
+    const snap = await db.collection('config').doc('notifications').get();
+    if (snap.exists) {
+      const override = snap.data()?.['notifyEmail'] as string | undefined;
+      if (override && override.trim()) return override.trim();
+    }
+  } catch {
+    // Firestore unavailable — fall through to the param.
+  }
+  return NOTIFY_EMAIL.value();
+}
 
 // ─── Config factory helpers ───────────────────────────────────────────────────
 
