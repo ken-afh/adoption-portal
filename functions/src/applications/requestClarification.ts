@@ -7,14 +7,15 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { STATUS, ROLE } from '../constants';
 import { sendEmail } from '../email/sendEmail';
 import { clarificationRequestEmail } from '../email/templates';
 import { APP_BASE_URL } from '../config';
 
 export const requestClarification = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true }> => {
-    requireRole(request, 'reviewer', 'admin');
+    requireRole(request, ROLE.REVIEWER, ROLE.ADMIN);
 
     const uid = request.auth!.uid;
     const reviewerName = (request.auth!.token['name'] as string) ?? 'Reviewer';
@@ -43,10 +44,10 @@ export const requestClarification = onCall(
 
     const appData = appSnap.data()!;
     const status = appData['status'] as string;
-    if (status !== 'Under Review') {
+    if (status !== STATUS.UNDER_REVIEW) {
       throw new HttpsError(
         'failed-precondition',
-        `Cannot request clarification: application status is "${status}", expected "Under Review".`,
+        `Cannot request clarification: application status is "${status}", expected "${STATUS.UNDER_REVIEW}".`,
       );
     }
 
@@ -54,7 +55,7 @@ export const requestClarification = onCall(
 
     // 1. Update application status.
     batch.update(appRef, {
-      status: 'Clarification Requested',
+      status: STATUS.CLARIFICATION_REQUESTED,
       lastEditedAt: FieldValue.serverTimestamp(),
     });
 
@@ -74,8 +75,8 @@ export const requestClarification = onCall(
     const logRef = appRef.collection('changelog').doc();
     batch.set(logRef, {
       fieldName: 'status',
-      oldValue: 'Under Review',
-      newValue: 'Clarification Requested',
+      oldValue: STATUS.UNDER_REVIEW,
+      newValue: STATUS.CLARIFICATION_REQUESTED,
       changedBy: uid,
       changedByEmail: reviewerEmail,
       changedAt: FieldValue.serverTimestamp(),

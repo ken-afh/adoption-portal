@@ -7,11 +7,12 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { STATUS, ROLE } from '../constants';
 
 export const startReview = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true }> => {
-    requireRole(request, 'reviewer', 'admin');
+    requireRole(request, ROLE.REVIEWER, ROLE.ADMIN);
 
     const uid = request.auth!.uid;
     const email = (request.auth!.token['email'] as string) ?? '';
@@ -30,25 +31,25 @@ export const startReview = onCall(
     }
 
     const status = appSnap.data()!['status'] as string;
-    if (status !== 'Submitted') {
+    if (status !== STATUS.SUBMITTED) {
       throw new HttpsError(
         'failed-precondition',
-        `Cannot start review: application status is "${status}", expected "Submitted".`,
+        `Cannot start review: application status is "${status}", expected "${STATUS.SUBMITTED}".`,
       );
     }
 
     const batch = db.batch();
 
     batch.update(appRef, {
-      status: 'Under Review',
+      status: STATUS.UNDER_REVIEW,
       lastEditedAt: FieldValue.serverTimestamp(),
     });
 
     const logRef = appRef.collection('changelog').doc();
     batch.set(logRef, {
       fieldName: 'status',
-      oldValue: 'Submitted',
-      newValue: 'Under Review',
+      oldValue: STATUS.SUBMITTED,
+      newValue: STATUS.UNDER_REVIEW,
       changedBy: uid,
       changedByEmail: email,
       changedAt: FieldValue.serverTimestamp(),

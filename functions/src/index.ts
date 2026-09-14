@@ -25,6 +25,10 @@ export { validateMx } from './auth/validateMx';
 export { createApplication } from './applications/createApplication';
 export { saveApplication } from './applications/saveApplication';
 export { submitApplication } from './applications/submitApplication';
+export { deleteApplication } from './applications/deleteApplication';
+export { adminDeleteApplication } from './applications/adminDeleteApplication';
+export { deleteMyData } from './applications/deleteMyData';
+export { processDeleteRequest } from './applications/processDeleteRequest';
 export { startReview } from './applications/startReview';
 export { requestClarification } from './applications/requestClarification';
 export { decideApplication } from './applications/decideApplication';
@@ -44,7 +48,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 export const onCommentCreated = onDocumentCreated(
   {
     document: 'applications/{applicationId}/comments/{commentId}',
-    region: 'us-central1',
+    region: 'us-east4',
   },
   async (_event) => {
     // TODO (Sub-Task 7): send email notifications for new comments.

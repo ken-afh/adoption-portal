@@ -9,13 +9,15 @@ import {
   onSnapshot,
   type Timestamp,
 } from "firebase/firestore"
-import { db } from "@/firebase"
+import { httpsCallable } from "firebase/functions"
+import { db, functions } from "@/firebase"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
 import { FullPageSpinner } from "@/components/ui/spinner"
-import { Loader2, Check, AlertCircle } from "lucide-react"
+import { Loader2, Check, AlertCircle, Trash2 } from "lucide-react"
 import { STATUS_CONFIG, type FirestoreApplication } from "@/components/ApplicationCard"
 import { useApplication } from "@/hooks/useApplication"
+import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 import { FormStepper } from "@/components/form/FormStepper"
 import { Section1Applicant } from "@/components/form/sections/Section1Applicant"
 import { Section2Home } from "@/components/form/sections/Section2Home"
@@ -51,9 +53,9 @@ function formatDate(ts: { toDate: () => Date } | null | undefined): string {
 }
 
 const EDITABLE_STATUSES: FirestoreApplication["status"][] = [
-  "draft",
-  "clarification_requested",
-  "rejected",
+  APPLICATION_STATUS.DRAFT,
+  APPLICATION_STATUS.CLARIFICATION_REQUESTED,
+  APPLICATION_STATUS.REJECTED,
 ]
 
 const TOTAL_SECTIONS = 8
@@ -74,7 +76,7 @@ const SECTION_LABELS = [
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatusCard({ application }: { application: FirestoreApplication }) {
-  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG.draft
+  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG[APPLICATION_STATUS.DRAFT]
 
   return (
     <div className="rounded-lg border bg-card p-5">
@@ -333,7 +335,7 @@ function EditableForm({
   const [currentSection, setCurrentSection] = useState(0)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const isResubmit = app.status === "rejected"
+  const isResubmit = app.status === APPLICATION_STATUS.REJECTED
 
   const clarificationRequest = [...comments]
     .reverse()
@@ -359,10 +361,10 @@ function EditableForm({
       {/* ── Status + banners ──────────────────────────────────────────── */}
       <div className="space-y-3 mb-4">
         <StatusCard application={app} />
-        {app.status === "clarification_requested" && clarificationRequest && (
+        {app.status === APPLICATION_STATUS.CLARIFICATION_REQUESTED && clarificationRequest && (
           <ClarificationBanner request={clarificationRequest} />
         )}
-        {app.status === "rejected" && (
+        {app.status === APPLICATION_STATUS.REJECTED && (
           <RejectionBanner reason={app.decisionReason} />
         )}
       </div>
@@ -480,6 +482,21 @@ export default function ApplicationPage() {
   const [loadingApp, setLoadingApp] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [comments, setComments] = useState<AppComment[]>([])
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!id) return
+    if (!window.confirm("Delete this application? This cannot be undone.")) return
+    setDeleting(true)
+    try {
+      await httpsCallable(functions, "deleteApplication")({ applicationId: id })
+      toast({ title: "Application deleted" })
+      navigate("/dashboard", { replace: true })
+    } catch {
+      toast({ title: "Could not delete application", variant: "destructive" })
+      setDeleting(false)
+    }
+  }
 
   // Fetch application document (one-time to get initial state + drive branch)
   useEffect(() => {
@@ -560,6 +577,22 @@ export default function ApplicationPage() {
           initialApplication={application}
           comments={comments}
         />
+        {/* Delete — shown below the form for draft/rejected */}
+        <div className="mt-8 border-t pt-6">
+          <p className="mb-3 text-sm text-muted-foreground">
+            No longer interested? You can delete this application permanently.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+            disabled={deleting}
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Deleting…" : "Delete application"}
+          </Button>
+        </div>
       </div>
     )
   }
@@ -569,9 +602,26 @@ export default function ApplicationPage() {
   return (
     <div className="max-w-2xl space-y-4">
       <StatusCard application={application} />
-      {application.status === "approved" && <ApprovalCard />}
-      {application.status === "rejected" && (
-        <RejectionCard reason={application.decisionReason} />
+      {application.status === APPLICATION_STATUS.APPROVED && <ApprovalCard />}
+      {application.status === APPLICATION_STATUS.REJECTED && (
+        <>
+          <RejectionCard reason={application.decisionReason} />
+          <div className="rounded-lg border p-4">
+            <p className="mb-3 text-sm text-muted-foreground">
+              You may delete this application instead of resubmitting.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+              disabled={deleting}
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleting ? "Deleting…" : "Delete application"}
+            </Button>
+          </div>
+        </>
       )}
       <CommentThread comments={comments} />
     </div>

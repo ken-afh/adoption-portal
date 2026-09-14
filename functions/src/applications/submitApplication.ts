@@ -7,13 +7,14 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { ApplicationStatus } from '../types';
+import { STATUS } from '../constants';
 import { sendEmail } from '../email/sendEmail';
 import {
   submissionConfirmationEmail,
   newSubmissionNotificationEmail,
   clarificationReceivedEmail,
 } from '../email/templates';
-import { APP_BASE_URL } from '../config';
+import { APP_BASE_URL, NOTIFY_EMAIL } from '../config';
 
 const REQUIRED_FIELDS: string[] = [
   'applicantName',
@@ -32,13 +33,13 @@ const REQUIRED_FIELDS: string[] = [
 ];
 
 const SUBMITTABLE_STATUSES: ApplicationStatus[] = [
-  'Draft',
-  'Clarification Requested',
-  'Rejected',
+  STATUS.DRAFT,
+  STATUS.CLARIFICATION_REQUESTED,
+  STATUS.REJECTED,
 ];
 
 export const submitApplication = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true; newStatus: string }> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -63,8 +64,8 @@ export const submitApplication = onCall(
     const db = admin.firestore();
     const appRef = db.collection('applications').doc(applicationId);
 
-    let newStatus: ApplicationStatus = 'Submitted';
-    let prevStatus: ApplicationStatus = 'Draft';
+    let newStatus: ApplicationStatus = STATUS.SUBMITTED;
+    let prevStatus: ApplicationStatus = STATUS.DRAFT;
     let appDataForEmail: Record<string, unknown> = {};
 
     await db.runTransaction(async (tx) => {
@@ -98,14 +99,14 @@ export const submitApplication = onCall(
 
       // Determine new status and whether to increment resubmitCount.
       let newResubmitCount: number = data['resubmitCount'] as number ?? 0;
-      if (prevStatus === 'Clarification Requested') {
-        newStatus = 'Clarification Received';
+      if (prevStatus === STATUS.CLARIFICATION_REQUESTED) {
+        newStatus = STATUS.CLARIFICATION_RECEIVED;
         newResubmitCount += 1;
-      } else if (prevStatus === 'Rejected') {
-        newStatus = 'Submitted';
+      } else if (prevStatus === STATUS.REJECTED) {
+        newStatus = STATUS.SUBMITTED;
         newResubmitCount += 1;
       } else {
-        newStatus = 'Submitted';
+        newStatus = STATUS.SUBMITTED;
       }
 
       const updates: Record<string, unknown> = {
@@ -147,7 +148,7 @@ export const submitApplication = onCall(
       const confirmTpl = submissionConfirmationEmail(applicantName, applicationId, baseUrl);
       await sendEmail({ to: submitterEmail, ...confirmTpl });
 
-      if (newStatus === 'Submitted') {
+      if (newStatus === STATUS.SUBMITTED) {
         const resubmitCount = (appDataForEmail['resubmitCount'] as number) ?? 0;
         const notifyTpl = newSubmissionNotificationEmail(
           applicantName,
@@ -156,8 +157,8 @@ export const submitApplication = onCall(
           baseUrl,
           resubmitCount,
         );
-        await sendEmail({ to: 'info@aforeverhome.org', ...notifyTpl });
-      } else if (newStatus === 'Clarification Received') {
+        await sendEmail({ to: NOTIFY_EMAIL.value(), ...notifyTpl });
+      } else if (newStatus === STATUS.CLARIFICATION_RECEIVED) {
         const reviewerEmail = appDataForEmail['assignedReviewerEmail'] as string | null;
         if (reviewerEmail) {
           const clarTpl = clarificationReceivedEmail(applicantName, applicationId, baseUrl);

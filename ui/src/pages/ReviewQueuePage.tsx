@@ -4,26 +4,20 @@ import { db } from "@/firebase"
 import { cn } from "@/lib/utils"
 import { type FirestoreApplication } from "@/components/ApplicationCard"
 import { ReviewQueueCard } from "@/components/ReviewQueueCard"
+import { APPLICATION_STATUS, type ApplicationStatus } from "@/lib/applicationStatus"
 
 // ─── Filter chip config ───────────────────────────────────────────────────────
 
-type FilterKey =
-  | "all"
-  | "unassigned"
-  | "submitted"
-  | "under_review"
-  | "clarification_received"
-  | "approved"
-  | "rejected"
+type FilterKey = "all" | "unassigned" | ApplicationStatus
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "unassigned", label: "Unassigned" },
-  { key: "submitted", label: "Submitted" },
-  { key: "under_review", label: "Under Review" },
-  { key: "clarification_received", label: "Clarification Received" },
-  { key: "approved", label: "Approved" },
-  { key: "rejected", label: "Rejected" },
+  { key: APPLICATION_STATUS.SUBMITTED, label: "Submitted" },
+  { key: APPLICATION_STATUS.UNDER_REVIEW, label: "Under Review" },
+  { key: APPLICATION_STATUS.CLARIFICATION_RECEIVED, label: "Clarification Received" },
+  { key: APPLICATION_STATUS.APPROVED, label: "Approved" },
+  { key: APPLICATION_STATUS.REJECTED, label: "Rejected" },
 ]
 
 // ─── Skeleton card ────────────────────────────────────────────────────────────
@@ -54,7 +48,7 @@ export default function ReviewQueuePage() {
   useEffect(() => {
     const q = query(
       collection(db, "applications"),
-      where("status", "!=", "draft"),
+      where("status", "!=", APPLICATION_STATUS.DRAFT),
       orderBy("status"),          // required by Firestore when using != with orderBy
       orderBy("submittedAt", "desc")
     )

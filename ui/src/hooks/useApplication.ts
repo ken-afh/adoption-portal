@@ -3,6 +3,7 @@ import { doc, onSnapshot } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import type { FirestoreApplication } from "@/components/ApplicationCard"
+import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 
 // ─── ApplicationFields ────────────────────────────────────────────────────────
 
@@ -44,9 +45,9 @@ export type ApplicationFields = {
 // ─── Statuses that allow editing ──────────────────────────────────────────────
 
 const EDITABLE_STATUSES: FirestoreApplication["status"][] = [
-  "draft",
-  "clarification_requested",
-  "rejected",
+  APPLICATION_STATUS.DRAFT,
+  APPLICATION_STATUS.CLARIFICATION_REQUESTED,
+  APPLICATION_STATUS.REJECTED,
 ]
 
 // ─── Default empty form data ──────────────────────────────────────────────────

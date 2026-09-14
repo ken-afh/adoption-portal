@@ -4,12 +4,14 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { STATUS_CONFIG, type FirestoreApplication } from "@/components/ApplicationCard"
+import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -230,7 +232,7 @@ function ManageRolesSection() {
               id="role-email"
               type="email"
               autoComplete="off"
-              placeholder="staff@aforeverhome.org"
+              placeholder="staff@aforeverhome.net"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
@@ -286,7 +288,7 @@ function ManageRolesSection() {
       </form>
 
       <p className="mt-4 text-xs text-muted-foreground">
-        Staff members must sign in with their @aforeverhome.org Google account before a
+        Staff members must sign in with their @aforeverhome.net Google account before a
         role can be assigned.
       </p>
     </section>
@@ -296,10 +298,10 @@ function ManageRolesSection() {
 // ─── Section 2 — Unassigned Applications ─────────────────────────────────────
 
 const UNASSIGNED_STATUSES = [
-  "submitted",
-  "under_review",
-  "clarification_requested",
-  "clarification_received",
+  APPLICATION_STATUS.SUBMITTED,
+  APPLICATION_STATUS.UNDER_REVIEW,
+  APPLICATION_STATUS.CLARIFICATION_REQUESTED,
+  APPLICATION_STATUS.CLARIFICATION_RECEIVED,
 ] as const
 
 function formatDate(ts: { toDate: () => Date } | null): string {
@@ -386,7 +388,7 @@ function UnassignedSection() {
           {applications.map((app) => {
             const config =
               STATUS_CONFIG[app.status as keyof typeof STATUS_CONFIG] ??
-              STATUS_CONFIG.draft
+              STATUS_CONFIG[APPLICATION_STATUS.DRAFT]
             return (
               <div
                 key={app.id}
@@ -430,7 +432,118 @@ function UnassignedSection() {
   )
 }
 
-// ─── Section 3 — Bootstrap instructions ──────────────────────────────────────
+// ─── Section 3 — Delete Data Requests (GDPR) ─────────────────────────────────
+
+interface DeleteRequest {
+  uid: string
+  email: string
+  requestedAt: { toDate: () => Date } | null
+  status: "pending" | "processed"
+}
+
+function DeleteRequestsSection() {
+  const [requests, setRequests] = useState<DeleteRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [processingUid, setProcessingUid] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "deleteRequests"),
+      where("status", "==", "pending"),
+      orderBy("requestedAt", "asc")
+    )
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setRequests(
+          snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<DeleteRequest, "uid">) }))
+        )
+        setLoading(false)
+      },
+      () => setLoading(false)
+    )
+    return unsubscribe
+  }, [])
+
+  async function handleProcess(uid: string, email: string) {
+    if (
+      !window.confirm(
+        `Permanently delete all data for ${email}?\n\nThis will remove all their applications, comments, and their account. This cannot be undone.`
+      )
+    )
+      return
+
+    setProcessingUid(uid)
+    try {
+      const fn = httpsCallable<{ requestUid: string }, { success: boolean }>(
+        functions,
+        "processDeleteRequest"
+      )
+      await fn({ requestUid: uid })
+      toast({ title: "Data deleted", description: `${email}'s data has been permanently deleted.` })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to process request."
+      toast({ title: "Error", description: msg, variant: "destructive" })
+    } finally {
+      setProcessingUid(null)
+    }
+  }
+
+  return (
+    <section className="rounded-xl border bg-card p-6">
+      <h2 className="mb-1 text-lg font-semibold">Delete Data Requests</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Pending GDPR / CCPA right-to-erasure requests from users. Processing a request
+        permanently deletes the user&rsquo;s account and all their data.
+      </p>
+
+      {loading ? (
+        <div className="space-y-3">
+          <SkeletonRow />
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-5 text-sm text-muted-foreground">
+          <span>✓</span>
+          <span>No pending deletion requests.</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((req) => (
+            <div
+              key={req.uid}
+              className="flex flex-wrap items-center gap-3 rounded-lg border bg-background px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-sm">{req.email}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Requested{" "}
+                  {req.requestedAt
+                    ? req.requestedAt.toDate().toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : "—"}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={processingUid === req.uid}
+                onClick={() => handleProcess(req.uid, req.email)}
+                className="rounded-md border border-destructive/40 bg-background px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                {processingUid === req.uid ? "Deleting…" : "Process & Delete"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ─── Section 4 — Bootstrap instructions ──────────────────────────────────────
 
 function BootstrapSection() {
   return (
@@ -451,7 +564,7 @@ function BootstrapSection() {
             In <strong>Firebase Console → Firestore → roles collection</strong>, create a
             document with <strong>ID = their Firebase UID</strong>, containing:
             <pre className="mt-2 overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs">
-              {`{\n  uid: "...",\n  role: "admin",\n  email: "staff@aforeverhome.org"\n}`}
+              {`{\n  uid: "...",\n  role: "admin",\n  email: "staff@aforeverhome.net"\n}`}
             </pre>
           </li>
           <li>
@@ -479,6 +592,7 @@ export default function AdminPage() {
 
       <ManageRolesSection />
       <UnassignedSection />
+      <DeleteRequestsSection />
       <BootstrapSection />
     </div>
   )

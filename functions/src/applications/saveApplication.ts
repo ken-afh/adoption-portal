@@ -7,22 +7,23 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { ApplicationStatus, UserRole } from '../types';
+import { STATUS, ROLE } from '../constants';
 
 // Fields the submitter (or reviewer) may write via this function.
 // All metadata / workflow fields are excluded.
 type ApplicationFields = Record<string, unknown>;
 
-const REVIEWER_ROLES: UserRole[] = ['reviewer', 'admin'];
+const REVIEWER_ROLES: UserRole[] = [ROLE.REVIEWER, ROLE.ADMIN];
 
 // Statuses in which a submitter is allowed to edit.
 const SUBMITTER_EDITABLE_STATUSES: ApplicationStatus[] = [
-  'Draft',
-  'Clarification Requested',
-  'Rejected',
+  STATUS.DRAFT,
+  STATUS.CLARIFICATION_REQUESTED,
+  STATUS.REJECTED,
 ];
 
 export const saveApplication = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true; fieldsChanged: number }> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'You must be signed in.');

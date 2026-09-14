@@ -7,11 +7,12 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { STATUS, ROLE } from '../constants';
 
 export const createApplication = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ id: string }> => {
-    requireRole(request, 'submitter');
+    requireRole(request, ROLE.SUBMITTER);
 
     const uid = request.auth!.uid;
     const email = (request.auth!.token['email'] as string) ?? '';
@@ -22,7 +23,7 @@ export const createApplication = onCall(
       submitterEmail: email,
 
       // Workflow
-      status: 'Draft',
+      status: STATUS.DRAFT,
       submittedAt: null,
       lastEditedAt: FieldValue.serverTimestamp(),
       resubmitCount: 0,

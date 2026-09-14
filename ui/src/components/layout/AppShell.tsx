@@ -1,6 +1,7 @@
-import React from "react"
+import React, { useState } from "react"
 import { Outlet, NavLink, useNavigate } from "react-router-dom"
 import { signOut } from "firebase/auth"
+import { httpsCallable } from "firebase/functions"
 import {
   FileText,
   Plus,
@@ -9,10 +10,12 @@ import {
   ChevronLeft,
   LogOut,
   User,
+  Trash2,
 } from "lucide-react"
-import { auth } from "@/firebase"
+import { auth, functions } from "@/firebase"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
@@ -57,9 +60,10 @@ function useNavItems(): NavItem[] {
 // ─── Top bar ─────────────────────────────────────────────────────────────────
 
 function TopBar() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
-  const [dropdownOpen, setDropdownOpen] = React.useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   const initials = user?.displayName
     ? user.displayName
@@ -73,6 +77,23 @@ function TopBar() {
   const handleSignOut = async () => {
     await signOut(auth)
     navigate("/login", { replace: true })
+  }
+
+  const handleDeleteMyData = async () => {
+    if (!window.confirm(
+      "This will permanently delete your account and all your applications. This cannot be undone. Continue?"
+    )) return
+    setDeletingAccount(true)
+    setDropdownOpen(false)
+    try {
+      await httpsCallable(functions, "deleteMyData")({})
+      await signOut(auth)
+      navigate("/", { replace: true })
+      toast({ title: "Your account and data have been deleted." })
+    } catch {
+      toast({ title: "Could not delete account. Please try again.", variant: "destructive" })
+      setDeletingAccount(false)
+    }
   }
 
   return (
@@ -123,6 +144,21 @@ function TopBar() {
                 <LogOut className="h-4 w-4" />
                 Sign out
               </Button>
+              {role === "submitter" && (
+                <>
+                  <div className="my-1 h-px bg-border" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={deletingAccount}
+                    onClick={handleDeleteMyData}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {deletingAccount ? "Deleting…" : "Delete my account"}
+                  </Button>
+                </>
+              )}
             </div>
           </>
         )}

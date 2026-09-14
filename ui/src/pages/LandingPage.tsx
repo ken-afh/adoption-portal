@@ -1,25 +1,9 @@
-import React, { useState } from "react"
+import React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
-import { PawPrint, ClipboardList, Search, Heart } from "lucide-react"
-
-// When the AFH logo SVG is available at /icons/afh-logo.svg, this component
-// will automatically use it. Until then, it falls back to the PawPrint icon.
-function OrgLogo({ className }: { className?: string }) {
-  const [imgFailed, setImgFailed] = useState(false)
-  if (imgFailed) {
-    return <PawPrint className={className ?? "h-10 w-10 text-primary"} />
-  }
-  return (
-    <img
-      src="/icons/afh-logo.svg"
-      alt="A Forever Home"
-      className={className ?? "h-14 w-14 object-contain"}
-      onError={() => setImgFailed(true)}
-    />
-  )
-}
+import { ClipboardList, Search, Heart } from "lucide-react"
+import { OrgLogoFull } from "@/components/OrgLogo"
 
 export default function LandingPage() {
   const { user } = useAuth()
@@ -33,8 +17,8 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Hero */}
       <section className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-          <OrgLogo />
+        <div className="mb-6">
+          <OrgLogoFull height={80} />
         </div>
         <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
           Find Your Forever Dog

@@ -7,13 +7,14 @@ import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
 import { UserRole } from '../types';
+import { ROLE } from '../constants';
 
-const VALID_ROLES: UserRole[] = ['submitter', 'reviewer', 'admin'];
+const VALID_ROLES: UserRole[] = [ROLE.SUBMITTER, ROLE.REVIEWER, ROLE.ADMIN];
 
 export const setUserRole = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true; uid: string }> => {
-    requireRole(request, 'admin');
+    requireRole(request, ROLE.ADMIN);
 
     const { email, role } = request.data as { email: string; role: UserRole };
 

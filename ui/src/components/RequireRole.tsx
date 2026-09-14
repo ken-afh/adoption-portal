@@ -18,11 +18,14 @@ export function RequireRole({ allowedRoles }: RequireRoleProps) {
     return <Navigate to="/login" replace />
   }
 
-  if (role && allowedRoles.includes(role)) {
+  if (allowedRoles.includes(role)) {
     return <Outlet />
   }
 
-  // Submitter trying to access reviewer/admin routes → back to dashboard
-  // Any other mismatch → login
-  return <Navigate to={user ? "/dashboard" : "/login"} replace />
+  // Wrong role: reviewer/admin routes redirect submitters to dashboard;
+  // submitter routes redirect reviewer/admin to their queue.
+  if (role === "submitter") {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Navigate to="/review" replace />
 }

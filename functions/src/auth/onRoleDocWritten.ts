@@ -8,7 +8,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { UserRole } from '../types';
 
 export const onRoleDocWritten = onDocumentWritten(
-  { document: 'roles/{uid}', region: 'us-central1' },
+  { document: 'roles/{uid}', region: 'us-east4' },
   async (event) => {
     const uid = event.params['uid'];
     const afterData = event.data?.after.data();

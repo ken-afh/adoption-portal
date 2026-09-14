@@ -5,21 +5,21 @@ import type { UserRole } from "@/types"
 
 interface AuthContextValue {
   user: User | null
-  role: UserRole | null
+  role: UserRole
   loading: boolean
   refreshRole: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
-  role: null,
+  role: "submitter",
   loading: true,
   refreshRole: async () => undefined,
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<UserRole | null>(null)
+  const [role, setRole] = useState<UserRole>("submitter")
   const [loading, setLoading] = useState(true)
 
   const extractRole = useCallback(async (u: User, forceRefresh = false): Promise<void> => {
@@ -28,7 +28,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (claim === "submitter" || claim === "reviewer" || claim === "admin") {
       setRole(claim)
     } else {
-      setRole(null)
+      // No role claim yet (e.g. onUserCreated function hasn't run yet,
+      // or claim hasn't propagated). Default to submitter — the safest
+      // fallback: submitters can only see their own data.
+      setRole("submitter")
     }
   }, [])
 
@@ -44,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (firebaseUser) {
         await extractRole(firebaseUser)
       } else {
-        setRole(null)
+        setRole("submitter")
       }
       setLoading(false)
     })

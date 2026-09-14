@@ -12,6 +12,9 @@ functions/lib/
 functions/.env
 functions/.secret.local
 
+# Miscellaneous
+todo
+
 # Firebase emulator data
 .firebase/
 firebase-debug.log

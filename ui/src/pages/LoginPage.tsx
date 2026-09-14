@@ -13,7 +13,7 @@ import { auth } from "@/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PawPrint } from "lucide-react"
+import { OrgLogoFull } from "@/components/OrgLogo"
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -133,8 +133,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <PawPrint className="h-6 w-6 text-primary" />
+          <div className="mb-4">
+            <OrgLogoFull height={72} />
           </div>
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="mt-1 text-sm text-muted-foreground">

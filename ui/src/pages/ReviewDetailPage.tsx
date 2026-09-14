@@ -11,7 +11,7 @@ import {
   type Timestamp,
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, Trash2 } from "lucide-react"
 import { db, functions } from "@/firebase"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,7 @@ import { FullPageSpinner } from "@/components/ui/spinner"
 import { STATUS_CONFIG, type FirestoreApplication } from "@/components/ApplicationCard"
 import { cn } from "@/lib/utils"
 import type { ApplicationFields } from "@/hooks/useApplication"
+import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 
 // ─── Comment type (matches Firestore schema) ──────────────────────────────────
 
@@ -547,6 +548,7 @@ type ActionDialog =
   | { type: "clarification" }
   | { type: "approve" }
   | { type: "reject" }
+  | { type: "delete" }
   | null
 
 function ActionBar({
@@ -556,7 +558,8 @@ function ActionBar({
   application: FirestoreApplication
   applicationId: string
 }) {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<ActionDialog>(null)
 
@@ -629,13 +632,26 @@ function ActionBar({
     }
   }
 
-  const showAssign = !assignedUid || assignedUid !== user?.uid
-  const showStart = status === "submitted"
-  const showClarification = status === "under_review"
-  const showDecide =
-    status === "under_review" || status === "clarification_received"
+  async function handleDelete() {
+    try {
+      await callFn("adminDeleteApplication", { applicationId })
+      setDialog(null)
+      toast({ title: "Application deleted" })
+      navigate("/review")
+    } catch {
+      toast({ title: "Failed to delete application", variant: "destructive" })
+    }
+  }
 
-  const hasActions = showAssign || showStart || showClarification || showDecide
+  const isAdmin = role === "admin"
+  const showAssign = !assignedUid || assignedUid !== user?.uid
+  const showStart = status === APPLICATION_STATUS.SUBMITTED
+  const showClarification = status === APPLICATION_STATUS.UNDER_REVIEW
+  const showDecide =
+    status === APPLICATION_STATUS.UNDER_REVIEW ||
+    status === APPLICATION_STATUS.CLARIFICATION_RECEIVED
+
+  const hasActions = showAssign || showStart || showClarification || showDecide || isAdmin
 
   if (!hasActions) return null
 
@@ -685,53 +701,77 @@ function ActionBar({
               </Button>
             </>
           )}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDialog({ type: "delete" })}
+              disabled={busy}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Desktop: inline bar (rendered by parent header area) */}
       <div className="hidden md:flex flex-wrap gap-2">
-        {showAssign && (
-          <Button size="sm" variant="outline" onClick={handleAssign} disabled={busy}>
-            Assign to Me
-          </Button>
-        )}
-        {showStart && (
-          <Button size="sm" onClick={handleStartReview} disabled={busy}>
-            {busy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-            Start Review
-          </Button>
-        )}
-        {showClarification && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDialog({ type: "clarification" })}
-            disabled={busy}
-          >
-            Request Clarification
-          </Button>
-        )}
-        {showDecide && (
-          <>
+          {showAssign && (
+            <Button size="sm" variant="outline" onClick={handleAssign} disabled={busy}>
+              Assign to Me
+            </Button>
+          )}
+          {showStart && (
+            <Button size="sm" onClick={handleStartReview} disabled={busy}>
+              {busy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              Start Review
+            </Button>
+          )}
+          {showClarification && (
             <Button
               size="sm"
-              onClick={() => setDialog({ type: "approve" })}
+              variant="outline"
+              onClick={() => setDialog({ type: "clarification" })}
               disabled={busy}
-              className="bg-green-600 text-white hover:bg-green-700"
             >
-              Approve
+              Request Clarification
             </Button>
+          )}
+          {showDecide && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setDialog({ type: "approve" })}
+                disabled={busy}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setDialog({ type: "reject" })}
+                disabled={busy}
+              >
+                Reject
+              </Button>
+            </>
+          )}
+          {isAdmin && (
             <Button
               size="sm"
-              variant="destructive"
-              onClick={() => setDialog({ type: "reject" })}
+              variant="outline"
+              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDialog({ type: "delete" })}
               disabled={busy}
             >
-              Reject
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
             </Button>
-          </>
-        )}
-      </div>
+          )}
+        </div>
 
       {/* Clarification sheet */}
       <TextSheet
@@ -764,6 +804,18 @@ function ActionBar({
         busy={busy}
         required
         onConfirm={handleReject}
+        onCancel={() => setDialog(null)}
+      />
+
+      {/* Admin delete confirm */}
+      <ConfirmDialog
+        open={dialog?.type === "delete"}
+        title="Delete Application?"
+        description="This will permanently delete the application and all its comments and history. This cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        busy={busy}
+        onConfirm={handleDelete}
         onCancel={() => setDialog(null)}
       />
     </>
@@ -841,7 +893,7 @@ export default function ReviewDetailPage() {
     )
   }
 
-  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG.submitted
+  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG[APPLICATION_STATUS.SUBMITTED]
   const displayName = application.applicantName?.trim() || "—"
 
   const TABS: { key: TabKey; label: string }[] = [

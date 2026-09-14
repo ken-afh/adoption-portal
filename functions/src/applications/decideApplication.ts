@@ -7,16 +7,18 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { STATUS, ROLE } from '../constants';
+import type { ApplicationStatus } from '../types';
 import { sendEmail } from '../email/sendEmail';
 import { approvalEmail, rejectionEmail } from '../email/templates';
 import { APP_BASE_URL } from '../config';
 
-const DECIDABLE_STATUSES = ['Under Review', 'Clarification Received'];
+const DECIDABLE_STATUSES: ApplicationStatus[] = [STATUS.UNDER_REVIEW, STATUS.CLARIFICATION_RECEIVED];
 
 export const decideApplication = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true }> => {
-    requireRole(request, 'reviewer', 'admin');
+    requireRole(request, ROLE.REVIEWER, ROLE.ADMIN);
 
     const uid = request.auth!.uid;
     const reviewerEmail = (request.auth!.token['email'] as string) ?? '';
@@ -46,7 +48,7 @@ export const decideApplication = onCall(
     }
 
     const appData = appSnap.data()!;
-    const currentStatus = appData['status'] as string;
+    const currentStatus = appData['status'] as ApplicationStatus;
 
     if (!DECIDABLE_STATUSES.includes(currentStatus)) {
       throw new HttpsError(
@@ -55,7 +57,7 @@ export const decideApplication = onCall(
       );
     }
 
-    const newStatus = decision === 'approved' ? 'Approved' : 'Rejected';
+    const newStatus = decision === 'approved' ? STATUS.APPROVED : STATUS.REJECTED;
     const decisionReason = decision === 'rejected' ? (reason ?? '').trim() : null;
 
     const batch = db.batch();

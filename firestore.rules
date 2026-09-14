@@ -37,6 +37,24 @@ service cloud.firestore {
       return !('status' in request.resource.data.diff(resource.data).affectedKeys());
     }
 
+    // ─── /deleteRequests collection ──────────────────────────────────────────
+    //
+    // Keyed by the requesting user's UID.
+    // • A signed-in user may read their own request (to show pending status).
+    // • A user may create their own request document (the Cloud Function does
+    //   the upsert via the admin SDK, but this rule allows it as a fallback).
+    //   All processing writes are admin-SDK only.
+    // • Admins may read any request document to list pending requests.
+    // • No client-side deletes or updates — Cloud Functions only.
+
+    match /deleteRequests/{uid} {
+      allow read: if isAdmin()
+                  || (isSignedIn() && request.auth.uid == uid);
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if false; // Cloud Functions only
+      allow delete: if false; // Cloud Functions only
+    }
+
     // ─── /roles collection ───────────────────────────────────────────────────
     //
     // Each document is keyed by the user's UID.

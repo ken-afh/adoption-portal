@@ -6,6 +6,7 @@
 import * as admin from 'firebase-admin';
 import { onCall } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { ROLE } from '../constants';
 
 interface Reviewer {
   uid: string;
@@ -18,14 +19,14 @@ interface ListReviewersResult {
 }
 
 export const listReviewers = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<ListReviewersResult> => {
-    requireRole(request, 'admin');
+    requireRole(request, ROLE.ADMIN);
 
     const snapshot = await admin
       .firestore()
       .collection('roles')
-      .where('role', 'in', ['reviewer', 'admin'])
+      .where('role', 'in', [ROLE.REVIEWER, ROLE.ADMIN])
       .get();
 
     const reviewers: Reviewer[] = snapshot.docs.map((doc) => {

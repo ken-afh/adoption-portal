@@ -98,7 +98,7 @@ export function submissionConfirmationEmail(
     ${p(`Thank you for submitting your dog adoption application. We have received it and our team will review it shortly.`)}
     ${p(`Your application reference number is: <strong>${applicationId}</strong>`)}
     ${btn(url, 'View Your Application')}
-    ${p(`If you have any questions, please contact us at <a href="mailto:info@aforeverhome.org" style="color:#2e7d32;">info@aforeverhome.org</a>.`)}
+    ${p(`If you have any questions, please contact us at <a href="mailto:info@aforeverhome.net" style="color:#2e7d32;">info@aforeverhome.net</a>.`)}
   `;
   return {
     subject: 'Your adoption application has been received',
@@ -224,7 +224,7 @@ export function rejectionEmail(
         <p style="margin:0;font-size:15px;color:#424242;line-height:1.6;">${reason}</p>
       </td></tr>
     </table>
-    ${p(`If you have questions about this decision, please contact us at <a href="mailto:info@aforeverhome.org" style="color:#2e7d32;">info@aforeverhome.org</a>.`)}
+    ${p(`If you have questions about this decision, please contact us at <a href="mailto:info@aforeverhome.net" style="color:#2e7d32;">info@aforeverhome.net</a>.`)}
     ${btn(url, 'View Your Application')}
   `;
   return {

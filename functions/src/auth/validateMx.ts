@@ -40,12 +40,10 @@ function dnsLookup(domain: string): Promise<boolean> {
 }
 
 export const validateMx = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<ValidateMxResponse> => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'You must be signed in.');
-    }
-
+    // Note: intentionally unauthenticated — called during registration
+    // before the user account exists.
     const data = request.data as ValidateMxRequest;
     if (!data?.email || typeof data.email !== 'string') {
       throw new HttpsError('invalid-argument', 'email is required.');

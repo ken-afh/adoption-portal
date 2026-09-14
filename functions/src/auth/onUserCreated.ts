@@ -10,6 +10,7 @@
 import * as admin from 'firebase-admin';
 import { auth } from 'firebase-functions/v1';
 import { ORG_DOMAIN } from '../config';
+import { ROLE } from '../constants';
 
 export const onUserCreated = auth.user().onCreate(async (user) => {
   const { uid, email, providerData } = user;
@@ -29,12 +30,12 @@ export const onUserCreated = auth.user().onCreate(async (user) => {
   }
 
   // Assign default submitter role via custom claim.
-  await admin.auth().setCustomUserClaims(uid, { role: 'submitter' });
+  await admin.auth().setCustomUserClaims(uid, { role: ROLE.SUBMITTER });
 
   // Persist role document in Firestore.
   await admin.firestore().collection('roles').doc(uid).set({
     uid,
-    role: 'submitter',
+    role: ROLE.SUBMITTER,
     email: email ?? '',
   });
 });

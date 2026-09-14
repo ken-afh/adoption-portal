@@ -7,14 +7,15 @@ import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { requireRole } from '../utils/requireRole';
+import { STATUS, ROLE } from '../constants';
 import { sendEmail } from '../email/sendEmail';
 import { reviewerAssignedEmail } from '../email/templates';
 import { APP_BASE_URL } from '../config';
 
 export const assignReviewer = onCall(
-  { region: 'us-central1' },
+  { region: 'us-east4' },
   async (request): Promise<{ success: true }> => {
-    requireRole(request, 'admin');
+    requireRole(request, ROLE.ADMIN);
 
     const adminUid = request.auth!.uid;
     const adminEmail = (request.auth!.token['email'] as string) ?? '';
@@ -45,7 +46,7 @@ export const assignReviewer = onCall(
 
     const appData = appSnap.data()!;
     const currentStatus = appData['status'] as string;
-    const autoStartReview = currentStatus === 'Submitted';
+    const autoStartReview = currentStatus === STATUS.SUBMITTED;
 
     const updates: Record<string, unknown> = {
       assignedReviewerUid: reviewerUid,
@@ -54,7 +55,7 @@ export const assignReviewer = onCall(
     };
 
     if (autoStartReview) {
-      updates['status'] = 'Under Review';
+      updates['status'] = STATUS.UNDER_REVIEW;
     }
 
     const batch = db.batch();
@@ -76,8 +77,8 @@ export const assignReviewer = onCall(
       const logRef2 = appRef.collection('changelog').doc();
       batch.set(logRef2, {
         fieldName: 'status',
-        oldValue: 'Submitted',
-        newValue: 'Under Review',
+        oldValue: STATUS.SUBMITTED,
+        newValue: STATUS.UNDER_REVIEW,
         changedBy: adminUid,
         changedByEmail: adminEmail,
         changedAt: FieldValue.serverTimestamp(),

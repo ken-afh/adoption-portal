@@ -21,7 +21,7 @@ export const SMTP_PASSWORD = defineSecret('SMTP_PASSWORD');
 
 /** The "from" address used in outbound notification emails. */
 export const EMAIL_FROM = defineString('EMAIL_FROM', {
-  default: 'no-reply@aforeverhome.org',
+  default: 'no-reply@aforeverhome.net',
   description: 'Sender address for transactional emails',
 });
 
@@ -51,8 +51,18 @@ export const APP_BASE_URL = defineString('APP_BASE_URL', {
 
 /** Google Workspace domain that reviewers must belong to. */
 export const ORG_DOMAIN = defineString('ORG_DOMAIN', {
-  default: 'aforeverhome.org',
+  default: 'aforeverhome.net',
   description: 'Allowed Google Workspace domain for reviewer sign-in',
+});
+
+/**
+ * Override address for new-submission notifications.
+ * In production this should be info@aforeverhome.net.
+ * During testing, set this to your own email to avoid alerting the real inbox.
+ */
+export const NOTIFY_EMAIL = defineString('NOTIFY_EMAIL', {
+  default: 'info@aforeverhome.net',
+  description: 'Recipient for new-submission and resubmission notifications (override for testing)',
 });
 
 // ─── Config factory helpers ───────────────────────────────────────────────────

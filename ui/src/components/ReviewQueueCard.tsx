@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { STATUS_CONFIG, type FirestoreApplication } from "@/components/ApplicationCard"
+import { APPLICATION_STATUS } from "@/lib/applicationStatus"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ interface ReviewQueueCardProps {
 
 export function ReviewQueueCard({ application }: ReviewQueueCardProps) {
   const navigate = useNavigate()
-  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG.submitted
+  const config = STATUS_CONFIG[application.status] ?? STATUS_CONFIG[APPLICATION_STATUS.SUBMITTED]
   const displayName = application.applicantName?.trim() || "—"
 
   const resubmitCount = (application as unknown as Record<string, unknown>)
